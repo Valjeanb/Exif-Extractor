@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo EXIF Data Extractor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .upload-container {
+            border: 2px dashed #3498db;
+            border-radius: 5px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            background-color: #f7f9fc;
+        }
+        .upload-container:hover {
+            background-color: #e8f4fc;
+            cursor: pointer;
+        }
+        #fileInput {
+            display: none;
+        }
+        .btn {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        .preview-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        #imagePreview {
+            max-width: 100%;
+            max-height: 400px;
+            margin-top: 20px;
+            border-radius: 4px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            display: none;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .no-data {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+            padding: 20px;
+        }
+        .export-btn {
+            background-color: #27ae60;
+        }
+        .export-btn:hover {
+            background-color: #219653;
+        }
+    </style>
+</head>
+<body>
+    <h1>Photo EXIF Data Extractor</h1>
+    
+    <div class="upload-container" id="dropZone">
+        <p>Drag & drop your photo here or click to select</p>
+        <input type="file" id="fileInput" accept="image/*">
+        <button class="btn" id="selectButton">Select Photo</button>
+    </div>
+    
+    <div class="preview-container">
+        <img id="imagePreview" alt="Image preview">
+    </div>
+    
+    <div id="exifDataContainer">
+        <h2>EXIF Data</h2>
+        <button id="exportButton" class="btn export-btn" style="display: none;">Export Data as CSV</button>
+        <div id="exifTableContainer">
+            <p class="no-data">Upload a photo to view EXIF data</p>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const selectButton = document.getElementById('selectButton');
+        const imagePreview = document.getElementById('imagePreview');
+        const exifTableContainer = document.getElementById('exifTableContainer');
+        const exportButton = document.getElementById('exportButton');
+        
+        // Handle file selection via button
+        selectButton.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        // Handle file selection
+        fileInput.addEventListener('change', handleFileSelect);
+        
+        // Handle drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.backgroundColor = '#e8f4fc';
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.backgroundColor = '#f7f9fc';
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.backgroundColor = '#f7f9fc';
+            
+            if (e.dataTransfer.files.length) {
+                handleFiles(e.dataTransfer.files);
+            }
+        });
+        
+        // Process the selected file
+        function handleFileSelect(e) {
+            if (e.target.files.length) {
+                handleFiles(e.target.files);
+            }
+        }
+        
+        function handleFiles(files) {
+            const file = files[0];
+            
+            // Only process image files
+            if (!file.type.match('image.*')) {
+                alert('Please select an image file');
+                return;
+            }
+            
+            // Display image preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreview.style.display = 'block';
+                
+                // Extract EXIF data
+                extractExifData(file);
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // Extract EXIF data from the image
+        function extractExifData(file) {
+            EXIF.getData(file, function() {
+                const exifData = EXIF.getAllTags(this);
+                displayExifData(exifData, file);
+            });
+        }
+        
+        // Display EXIF data in a table
+        function displayExifData(exifData, file) {
+            // Create a table to display the data
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Property</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>File Name</td>
+                            <td>${file.name}</td>
+                        </tr>
+                        <tr>
+                            <td>File Size</td>
+                            <td>${formatFileSize(file.size)}</td>
+                        </tr>
+                        <tr>
+                            <td>File Type</td>
+                            <td>${file.type}</td>
+                        </tr>
+            `;
+            
+            // Add EXIF data to the table
+            const exifProperties = Object.keys(exifData);
+            
+            if (exifProperties.length === 0) {
+                tableHTML += `
+                    <tr>
+                        <td colspan="2" class="no-data">No EXIF data found in this image</td>
+                    </tr>
+                `;
+            } else {
+                exifProperties.forEach(prop => {
+                    let value = exifData[prop];
+                    
+                    // Format GPS coordinates
+                    if (prop === 'GPSLatitude' || prop === 'GPSLongitude') {
+                        const ref = exifData[prop + 'Ref'] || '';
+                        value = formatGPSCoordinate(value, ref);
+                    }
+                    
+                    // Format date
+                    if (prop === 'DateTime' || prop === 'DateTimeOriginal' || prop === 'DateTimeDigitized') {
+                        value = formatExifDate(value);
+                    }
+                    
+                    // Format arrays
+                    if (Array.isArray(value)) {
+                        if (value.length === 1) {
+                            value = value[0];
+                        } else {
+                            value = JSON.stringify(value);
+                        }
+                    }
+                    
+                    tableHTML += `
+                        <tr>
+                            <td>${formatPropertyName(prop)}</td>
+                            <td>${value}</td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            exifTableContainer.innerHTML = tableHTML;
+            exportButton.style.display = 'inline-block';
+            
+            // Enable export functionality
+            exportButton.onclick = () => exportAsCSV(exifData, file);
+        }
+        
+        // Format property names for better readability
+        function formatPropertyName(name) {
+            // Add spaces before capital letters
+            const formatted = name.replace(/([A-Z])/g, ' $1');
+            
+            // Capitalize first letter
+            return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+        }
+        
+        // Format file size to human-readable format
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Format GPS coordinates
+        function formatGPSCoordinate(coord, ref) {
+            if (!coord || coord.length < 3) return '';
+            
+            const degrees = coord[0];
+            const minutes = coord[1];
+            const seconds = coord[2];
+            
+            // Convert to decimal degrees
+            let decimal = degrees + (minutes / 60) + (seconds / 3600);
+            
+            // Apply negative value for South or West
+            if (ref === 'S' || ref === 'W') {
+                decimal = -decimal;
+            }
+            
+            // Return both formats
+            return `${degrees}° ${minutes}' ${seconds}" ${ref} (${decimal.toFixed(6)}°)`;
+        }
+        
+        // Format EXIF date
+        function formatExifDate(dateStr) {
+            if (!dateStr) return '';
+            
+            // Convert EXIF date format (YYYY:MM:DD HH:MM:SS) to standard format
+            const parts = dateStr.split(' ');
+            if (parts.length !== 2) return dateStr;
+            
+            const datePart = parts[0].replace(/:/g, '-');
+            return `${datePart} ${parts[1]}`;
+        }
+        
+        // Export EXIF data as CSV
+        function exportAsCSV(exifData, file) {
+            let csvContent = 'Property,Value\n';
+            
+            // Add file info
+            csvContent += `File Name,${file.name}\n`;
+            csvContent += `File Size,${formatFileSize(file.size)}\n`;
+            csvContent += `File Type,${file.type}\n`;
+            
+            // Add EXIF data
+            for (const prop in exifData) {
+                let value = exifData[prop];
+                
+                // Format arrays
+                if (Array.isArray(value)) {
+                    value = JSON.stringify(value);
+                }
+                
+                // Escape commas and quotes in values
+                const escapedValue = ('' + value).replace(/"/g, '""');
+                
+                csvContent += `${formatPropertyName(prop)},"${escapedValue}"\n`;
+            }
+            
+            // Create download link
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `${file.name.split('.')[0]}_exif_data.csv`);
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
